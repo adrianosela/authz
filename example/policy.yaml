@@ -1,0 +1,40 @@
+roles:
+  viewer:
+    permissions:
+      - view
+  admin:
+    permissions:
+      - modify
+    extends:
+      - viewer
+  superadmin:
+    permissions:
+      - disable
+    extends:
+      - admin
+resources:
+  feature_flag_a:
+    admin:
+      groups:
+        - Everyone
+    superadmin:
+      users:
+        - anne
+  feature_flag_b:
+    admin:
+      users:
+        - larry
+        - anne
+        - graham
+      groups:
+        - Engineering
+    viewer:
+      groups:
+        - Everyone
+  feature_flag_c:
+    admin:
+      groups:
+        - Infrastructure Engineering
+    viewer:
+      groups:
+        - Engineering
