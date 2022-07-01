@@ -22,9 +22,9 @@ func Test_hasPermissionOnResource(t *testing.T) {
 		{
 			name: "Allowed when entity has resource permission",
 			db: map[string]resourcePermissions{
-				mockEntity: map[string][]string{
+				mockEntity: map[string]set{
 					mockResource: {
-						mockPermission,
+						mockPermission: {},
 					},
 				},
 			},
@@ -36,7 +36,7 @@ func Test_hasPermissionOnResource(t *testing.T) {
 		{
 			name: "Not allowed when entity does not have resource permission",
 			db: map[string]resourcePermissions{
-				mockEntity: map[string][]string{
+				mockEntity: map[string]set{
 					mockResource: { /* empty */ },
 				},
 			},
@@ -48,7 +48,7 @@ func Test_hasPermissionOnResource(t *testing.T) {
 		{
 			name: "Not allowed when entity does not have resource",
 			db: map[string]resourcePermissions{
-				mockEntity: map[string][]string{ /* empty */ },
+				mockEntity: map[string]set{ /* empty */ },
 			},
 			checkedEntity:     mockEntity,
 			checkedResource:   mockResource,
@@ -91,9 +91,9 @@ func Test_Authorize(t *testing.T) {
 			name: "Allowed when user has resource permission",
 			authorizer: &Authorizer{
 				Users: map[string]resourcePermissions{
-					mockUser: map[string][]string{
+					mockUser: map[string]set{
 						mockResource: {
-							mockPermission,
+							mockPermission: {},
 						},
 					},
 				},
@@ -108,9 +108,9 @@ func Test_Authorize(t *testing.T) {
 			name: "Allowed when group has resource permission",
 			authorizer: &Authorizer{
 				Groups: map[string]resourcePermissions{
-					mockGroupC: map[string][]string{
+					mockGroupC: map[string]set{
 						mockResource: {
-							mockPermission,
+							mockPermission: {},
 						},
 					},
 				},
@@ -125,18 +125,18 @@ func Test_Authorize(t *testing.T) {
 			name: "Not allowed when no entities have resource permission",
 			authorizer: &Authorizer{
 				Users: map[string]resourcePermissions{
-					mockUser: map[string][]string{
+					mockUser: map[string]set{
 						mockResource: { /* empty */ },
 					},
 				},
 				Groups: map[string]resourcePermissions{
-					mockGroupA: map[string][]string{
+					mockGroupA: map[string]set{
 						mockResource: { /* empty */ },
 					},
-					mockGroupB: map[string][]string{
+					mockGroupB: map[string]set{
 						mockResource: { /* empty */ },
 					},
-					mockGroupC: map[string][]string{
+					mockGroupC: map[string]set{
 						mockResource: { /* empty */ },
 					},
 				},
@@ -151,12 +151,12 @@ func Test_Authorize(t *testing.T) {
 			name: "Not allowed when no entities have resource defined",
 			authorizer: &Authorizer{
 				Users: map[string]resourcePermissions{
-					mockUser: map[string][]string{ /* empty */ },
+					mockUser: map[string]set{ /* empty */ },
 				},
 				Groups: map[string]resourcePermissions{
-					mockGroupA: map[string][]string{ /* empty */ },
-					mockGroupB: map[string][]string{ /* empty */ },
-					mockGroupC: map[string][]string{ /* empty */ },
+					mockGroupA: map[string]set{ /* empty */ },
+					mockGroupB: map[string]set{ /* empty */ },
+					mockGroupC: map[string]set{ /* empty */ },
 				},
 			},
 			checkedUser:       mockUser,

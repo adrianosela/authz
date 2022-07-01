@@ -9,12 +9,11 @@ import (
 	"os"
 	"time"
 
-	"golang.org/x/exp/slices"
 	yaml "gopkg.in/yaml.v3"
 )
 
-// mapping of resource name to permissions over the resource
-type resourcePermissions map[string][]string
+// mapping of resource name to a set permissions over the resource
+type resourcePermissions map[string]set
 
 // Authorizer maintains the compiled authorization data
 type Authorizer struct {
@@ -22,7 +21,7 @@ type Authorizer struct {
 	SourcePolicyHash string `json:"source_policy_hash"`
 
 	// role name to the permissions granted by the role
-	Roles map[string][]string `json:"roles,omitempty"`
+	Roles map[string]set `json:"roles,omitempty"`
 
 	// user name to resource permissions
 	Users map[string]resourcePermissions `json:"users,omitempty"`
@@ -117,7 +116,7 @@ func (a *Authorizer) compilePermissions(p *Policy, role string, stack []string) 
 	}
 
 	// copy base permissions from policy
-	a.Roles[role] = p.Roles[role].Permissions
+	a.Roles[role] = newSet(p.Roles[role].Permissions...)
 
 	for _, inheritedRole := range p.Roles[role].Extends {
 		// if the inherited role has not been processed, process it
@@ -126,36 +125,37 @@ func (a *Authorizer) compilePermissions(p *Policy, role string, stack []string) 
 				return err
 			}
 		}
+
 		// then copy over the interited perms
-		a.Roles[role] = append(a.Roles[role], a.Roles[inheritedRole]...)
+		a.Roles[role].join(a.Roles[inheritedRole])
 	}
 
 	return nil
 }
 
 // recursive function to compile permissions with cycle detection
-func (a *Authorizer) compilePermissionsWithCycleDetection(p *Policy, role string, icd map[string]struct{}, stack []string) error {
+func (a *Authorizer) compilePermissionsWithCycleDetection(p *Policy, role string, icd set, stack []string) error {
 	// check inheriting role exists in policy
 	if _, ok := p.Roles[role]; !ok {
 		return fmt.Errorf("Role %s not defined. Stack: %s", role, buildStackString(stack))
 	}
 
 	// check no cycles in policy
-	if _, ok := icd[role]; ok {
+	if icd.has(role) {
 		return fmt.Errorf("Inheritance cycle detected. Stack: %s", buildStackString(stack))
 	}
-	icd[role] = struct{}{} // mark as "seen"
+	icd.add(role) // mark as seen
 
 	// copy base permissions from policy
-	a.Roles[role] = p.Roles[role].Permissions
+	a.Roles[role] = newSet(p.Roles[role].Permissions...)
 
 	for _, inheritedRole := range p.Roles[role].Extends {
 		// always process the inherited role (in order to detect cycles)
-		if err := a.compilePermissionsWithCycleDetection(p, inheritedRole, copySet(icd), append(stack, inheritedRole)); err != nil {
+		if err := a.compilePermissionsWithCycleDetection(p, inheritedRole, icd.copy(), append(stack, inheritedRole)); err != nil {
 			return err
 		}
 		// then copy over the interited perms
-		a.Roles[role] = dedupSlice(append(a.Roles[role], a.Roles[inheritedRole]...))
+		a.Roles[role].join(a.Roles[inheritedRole])
 	}
 
 	return nil
@@ -163,13 +163,10 @@ func (a *Authorizer) compilePermissionsWithCycleDetection(p *Policy, role string
 
 // compile roles from the policy (definition format) onto the authorizer (consumable format)
 func (a *Authorizer) compileRoles(p *Policy) error {
-	a.Roles = make(map[string][]string)
+	a.Roles = make(map[string]set)
 
 	for role := range p.Roles {
-		inheritanceCycleDetectionSet := make(map[string]struct{})
-		inheritanceStack := []string{role}
-
-		if err := a.compilePermissionsWithCycleDetection(p, role, inheritanceCycleDetectionSet, inheritanceStack); err != nil {
+		if err := a.compilePermissionsWithCycleDetection(p, role, newSet(), []string{role}); err != nil {
 			return fmt.Errorf("Failed to compile permissions set for role \"%s\": %s", role, err)
 		}
 	}
@@ -190,18 +187,18 @@ func (a *Authorizer) compileResources(p *Policy) error {
 					a.Users[user] = make(resourcePermissions)
 				}
 				if _, ok := a.Users[user][resource]; !ok {
-					a.Users[user][resource] = []string{}
+					a.Users[user][resource] = newSet()
 				}
-				a.Users[user][resource] = append(a.Users[user][resource], a.Roles[role]...)
+				a.Users[user][resource].join(a.Roles[role])
 			}
 			for _, group := range identities.Groups {
 				if _, ok := a.Groups[group]; !ok {
 					a.Groups[group] = make(resourcePermissions)
 				}
 				if _, ok := a.Groups[group][resource]; !ok {
-					a.Groups[group][resource] = []string{}
+					a.Groups[group][resource] = newSet()
 				}
-				a.Groups[group][resource] = append(a.Groups[group][resource], a.Roles[role]...)
+				a.Groups[group][resource].join(a.Roles[role])
 			}
 		}
 	}
@@ -252,5 +249,5 @@ func hasPermissionOnResource(entity string, m map[string]resourcePermissions, re
 	if !ok {
 		return false
 	}
-	return slices.Contains(perms, permission)
+	return perms.has(permission)
 }
