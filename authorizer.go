@@ -43,6 +43,8 @@ func Load(fname string) (*Authorizer, error) {
 		return nil, fmt.Errorf("Failed to read policy file: %s", err)
 	}
 
+	policyHash := fmt.Sprintf("%x", sha256.Sum256(fbytes))
+
 	if _, err := os.Stat(defaultCacheFilename); err == nil {
 		log.Printf("[authz] <INFO> Cache file %s found, checking hash...", defaultCacheFilename)
 
@@ -56,7 +58,7 @@ func Load(fname string) (*Authorizer, error) {
 			return nil, fmt.Errorf("Failed to unmarshal cache file: %s", err)
 		}
 
-		if a.SourcePolicyHash == fmt.Sprintf("%x", sha256.Sum256(fbytes)) {
+		if a.SourcePolicyHash == policyHash {
 			log.Printf("[authz] <INFO> Hash on cache file matches policy hash, using authz data from cache")
 
 			a.logMetrics()
@@ -64,16 +66,17 @@ func Load(fname string) (*Authorizer, error) {
 		}
 
 		log.Printf("[authz] <INFO> Hash on cache file differs from policy hash, re-processing...")
+	} else {
+		log.Printf("[authz] <INFO> Cache file %s not found, processing policy...", defaultCacheFilename)
 	}
 
-	log.Printf("[authz] <INFO> Cache file %s not found, processing policy...", defaultCacheFilename)
 	start := time.Now()
 
 	var policy *Policy
 	if err = yaml.Unmarshal(fbytes, &policy); err != nil {
 		return nil, fmt.Errorf("Failed to unmarshal policy file: %s", err)
 	}
-	a := &Authorizer{SourcePolicyHash: fmt.Sprintf("%x", sha256.Sum256(fbytes))}
+	a := &Authorizer{SourcePolicyHash: policyHash}
 	if err = a.compileRoles(policy); err != nil {
 		return nil, fmt.Errorf("Failed to compile roles: %s", err)
 	}
@@ -227,7 +230,7 @@ func (a *Authorizer) logMetrics() {
 	)
 }
 
-// save writes out the authorizer's data to the file sytem.
+// save writes out the authorizer's data to the file system.
 func (a *Authorizer) save(fname string) error {
 	serialized, err := json.Marshal(a)
 	if err != nil {
